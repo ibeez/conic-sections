@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light"><title>Conic Sections</title><style>.mcap{display:none!important}@media (max-width:560px){.stat .v{font-size:20px!important}.stats{align-items:flex-end}}@media (min-width:561px){.vset{top:4px!important}#stats{top:var(--vset-h,44px)!important}}</style><style>@media (max-width:560px){body > header{display:none}}</style><script>window.FIG_A = () => innerWidth <= 560 ? 1.1 : .75;</script><script>window.LBL_U = () => { if (innerWidth > 560) return 0; const s = document.getElementById("fig"); return s && s.clientWidth && s.viewBox.baseVal.width ? s.viewBox.baseVal.width / s.clientWidth : 0; };</script></head><body>
+<meta name="color-scheme" content="light"><title>Conic Sections</title>
+<style>@media (max-width:560px){.stats{flex-wrap:wrap;row-gap:6px!important}}</style><style>.mcap{display:none!important}@media (max-width:560px){.stat .v{font-size:20px!important}.stats{align-items:flex-end}}@media (min-width:561px){.vset{top:4px!important}#stats{top:var(--vset-h,44px)!important}}</style><style>@media (max-width:560px){body > header{display:none}}</style><script>window.FIG_A = () => innerWidth <= 560 ? 1.1 : .75;</script><script>window.LBL_U = () => { if (innerWidth > 560) return 0; const s = document.getElementById("fig"); return s && s.clientWidth && s.viewBox.baseVal.width ? s.viewBox.baseVal.width / s.clientWidth : 0; };</script></head><body>
 <script>
 /* ============================================================
    Colorfigures core: projection, shapes, shading, ink, labels, page shell.
@@ -649,8 +650,8 @@ function mountKeypad(spec){
 /* Conic sections: a clear acrylic double cone cut by one tilting plane.
    How it really works (the maths the model shows):
    - Double cone: every line through the vertex V at the half-angle ALPHA to the axis. Two nappes, tip to tip.
-   - The cutting plane tilts by BETA from horizontal about a fixed horizontal hinge line (in front of the axis,
-     a little above V). Its eccentricity is e = sin BETA / cos ALPHA:
+   - The cutting plane turns freely about a fixed pivot point (a little in front of the axis, above V): it can tilt
+     by any BETA from horizontal, toward any direction PHI. Its eccentricity is e = sin BETA / cos ALPHA:
        BETA = 0          circle      (e = 0)
        0 < BETA < 70     ellipse     (e < 1)   plane cuts one nappe all the way round
        BETA = 70         parabola    (e = 1)   plane parallel to a generator
@@ -665,24 +666,28 @@ function mountKeypad(spec){
 const CW = 100, BH = 3;
 const HN = 60, ALPHA = 20*Math.PI/180, KT = Math.tan(ALPHA), RB = HN*KT;
 const VX = 50, VY = 50, VZ = BH + HN, VTX = [VX, VY, VZ];
-const PHI = 45*Math.PI/180, HD = [Math.cos(PHI), Math.sin(PHI), 0], E2 = [-Math.sin(PHI), Math.cos(PHI), 0];
-const HINGE_P = 4, HINGE_H = 20;                                   // hinge line: 4 toward the viewer, 20 above V
-const HINGE = [VX + HINGE_P*HD[0], VY + HINGE_P*HD[1], VZ + HINGE_H];
+const PIV = [VX + 4*Math.SQRT1_2, VY + 4*Math.SQRT1_2, VZ + 20];   // pivot: 4 toward the front view, 20 above V
 const BOXR = 40, BOXTOP = VZ + HN + 6;                             // the sheet is the plane inside this box
 const SPHM = { l:'#fbfaf3', m:'#dcd8c8', d:'#bdb8a6' };
+/* colours from the marker palette sheet (solid swatches, judy-site/design/textures/palette-full.json) */
+for (const key of Object.keys(PALS)) delete PALS[key];
+Object.assign(PALS, { blue: matOf('#519aff'), coral: matOf('#ff5662'), matcha: matOf('#b5e674'), yellow: matOf('#ffa828'), peach: matOf('#ffb3b1') });
+const GLASS = { l: mix('#a2dfff', '#ffffff', .72), m: mix('#a2dfff', '#ffffff', .45), d: mix('#a2dfff', '#5d7f99', .35) };   // Grayishlight Blue Pale
+const CAMEL = matOf('#f6a167');                                                                                            // Pale Camel board
 const rad = d => d*Math.PI/180;
 const addV = (a, b, k = 1) => [a[0] + b[0]*k, a[1] + b[1]*k, a[2] + b[2]*k];
 
-/* ---------- the plane for a tilt (degrees) ---------- */
-function planeOf(betaDeg){
-  const b = rad(betaDeg), sb = Math.sin(b), cb = Math.cos(b);
-  const n = [sb*HD[0], sb*HD[1], cb], e1 = [-cb*HD[0], -cb*HD[1], sb];
-  return { b, sb, cb, n, e1, delta: dot(n, sub(HINGE, VTX)) };
+/* ---------- the plane for a tilt BETA toward direction PHI (degrees), through the pivot ----------
+   n = normal (always pointing up), e1 = steepest line in the plane, e2 = level line in the plane */
+function planeOf(betaDeg, phiDeg){
+  const b = rad(betaDeg), phi = rad(phiDeg), sb = Math.sin(b), cb = Math.cos(b), hd = [Math.cos(phi), Math.sin(phi), 0];
+  const n = [sb*hd[0], sb*hd[1], cb], e1 = [-cb*hd[0], -cb*hd[1], sb], e2 = [-hd[1], hd[0], 0];
+  return { b, phi, sb, cb, n, e1, e2, delta: dot(n, sub(PIV, VTX)) };
 }
 
 /* ---------- the curve: for each nappe (sg = +1 up, -1 down) the run of points where the plane meets it ----------
    a point on the cone is V + s*(KT cos t, KT sin t, sg) with 0 < s <= HN; on the plane n.(p - V) = delta, so
-   s = delta / (KT sin(beta) cos(t - PHI) + sg cos(beta)) */
+   s = delta / (KT sin(beta) cos(t - phi) + sg cos(beta)) */
 function sectionOf(pl){
   const out = [];
   for (const sg of [1, -1]){
@@ -692,7 +697,7 @@ function sectionOf(pl){
     if (KT*pl.sb > 1e-9){ const cv = (pl.delta/HN - sg*pl.cb)/(KT*pl.sb);
       if (Math.abs(cv) <= 1){ const a = Math.acos(cv); ps.push(a, -a); } }   // exact points where the curve meets the rim
     ps.sort((a, b) => a - b);
-    const pts = ps.map(p => { const s = sAt(p); if (!ok(s)) return null; const t = p + PHI;
+    const pts = ps.map(p => { const s = sAt(p); if (!ok(s)) return null; const t = p + pl.phi;
       return [VX + s*KT*Math.cos(t), VY + s*KT*Math.sin(t), VZ + sg*s]; });
     if (pts.every(Boolean)){ out.push({ sg, pts, closed: true }); continue; }
     const i0 = pts.findIndex(p => !p), run = [];
@@ -714,7 +719,7 @@ function spheresOf(pl){
     const c = [VX, VY, VZ + u], dist = dot(pl.n, sub(c, VTX)) - pl.delta;
     const zt = VZ + u*ca*ca, rt = Math.abs(u)*ca*sa;
     let dir = null;
-    if (pl.sb > .02){ const a = (zt - HINGE[2])/pl.sb; dir = [addV(addV(HINGE, pl.e1, a), E2, -BOXR*1.6), addV(addV(HINGE, pl.e1, a), E2, BOXR*1.6)]; }
+    if (pl.sb > .02){ const a = (zt - PIV[2])/pl.sb; dir = [addV(addV(PIV, pl.e1, a), pl.e2, -BOXR*1.6), addV(addV(PIV, pl.e1, a), pl.e2, BOXR*1.6)]; }
     res.push({ c, u, rho, sg: Math.sign(u), side: Math.sign(dist), foc: addV(c, pl.n, -dist), zt, rt, dir });
   }
   return res;
@@ -746,14 +751,14 @@ const dash = (pts, w, col = INK, da = '3 3', op = 1) => `<path d="${pd(pts, fals
 
 function nappeWalls(sg, k){
   const A = coneRing(sg, .01), B = coneRing(sg, RB);
-  let far = `<g opacity="${f(.5 - .15*k)}">` + loft(A, B, n => mix(toneI(n.map(v => -v), CLEAR), '#f2efe7', .25), true) + `</g>`;
-  let near = `<g opacity="${f(.3 - .12*k)}">` + loft(A, B, n => tone(n, CLEAR)) + `</g>`;
+  let far = `<g opacity="${f(.5 - .15*k)}">` + loft(A, B, n => mix(toneI(n.map(v => -v), GLASS), '#f2efe7', .25), true) + `</g>`;
+  let near = `<g opacity="${f(.3 - .12*k)}">` + loft(A, B, n => tone(n, GLASS)) + `</g>`;
   // glints down the near side, along generators
   for (const [da, t0, t1] of [[-28, .2, .85], [-38, .35, .7]]){ const t = rad(YAW + da), g = s => [VX + s*KT*Math.cos(t), VY + s*KT*Math.sin(t), VZ + sg*s];
     near += `<path d="${pd([g(HN*t0), g(HN*t1)], false)}" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>`; }
   const zb = VZ + sg*HN;
   if (sg > 0){   // top face of the upper nappe, a clear disc seen from above
-    near += fill(pd(B), CLEAR.l, `opacity="${f(.22 - .1*k)}"`) + ink(pd(B), 1.5);
+    near += fill(pd(B), GLASS.l, `opacity="${f(.22 - .1*k)}"`) + ink(pd(B), 1.5);
     near += `<path d="${pd(ringArc(zb - .1, RB*.82, YAW + 120, YAW + 165), false)}" fill="none" stroke="#fff" stroke-width="1.6" opacity=".7" stroke-linecap="round"/>`;
   } else {       // base standing on the board: far half of its rim seen through the acrylic
     far += line(ringArc(zb, RB, ...farHalf()), .9);
@@ -764,12 +769,12 @@ function nappeWalls(sg, k){
 }
 
 function sheetSvg(pl, k){
-  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => addV(addV(HINGE, pl.e1, a*BOXR*2), E2, b*BOXR*2));
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => addV(addV(PIV, pl.e1, a*BOXR*2), pl.e2, b*BOXR*2));
   const poly = clipBox(corners);
   if (poly.length < 3) return '';
   const nT = pl.n.map(v => v*.6), A = poly.map(p => sub(p, nT)), B = poly.map(p => addV(p, nT));
   const fn = facing(pl.n) ? pl.n : pl.n.map(v => -v), top = facing(pl.n) ? B : A;
-  return `<g opacity="${f(1 - .65*k)}"><g opacity=".42">` + loft(A, B, n => tone(n, CLEAR)) + fill(pd(top), tone(fn, CLEAR)) + `</g>`
+  return `<g opacity="${f(1 - .65*k)}"><g opacity=".42">` + loft(A, B, n => tone(n, GLASS)) + fill(pd(top), tone(fn, GLASS)) + `</g>`
     + ink(pd(top), 1.3) + hullInk([...A, ...B], 1.6) + `</g>`;
 }
 
@@ -783,10 +788,42 @@ function ball(sp){
 }
 const dot3 = (p, r, col) => { const [X, Y] = P(...p); return `<circle cx="${f(X)}" cy="${f(Y)}" r="${f(r*INK_K)}" fill="${col}" stroke="${INK}" stroke-width="1.1"/>`; };
 
+/* ---------- labels: the engine's two-column pills (xrCallouts), but each label keeps its side while the camera turns.
+   A label only changes column once its anchor is clearly past the middle (or an item fixes it with side: -1 / 1),
+   so anchors near the centre line don't flicker between the columns. ---------- */
+const labelSide = {};
+function callouts(items, B){
+  const pts = []; for (const x of [B[0], B[1]]) for (const y of [B[2], B[3]]) for (const z of [B[4], B[5]]) pts.push(P(x, y, z));
+  const xmin = Math.min(...pts.map(p => p[0])), xmax = Math.max(...pts.map(p => p[0])), cx = (xmin + xmax)/2;
+  const k = INK_K, u = window.LBL_U ? LBL_U() : 0, fs = u ? 10*u : 8.6*k, hgt = u ? 17*u : fs*1.8, gap = hgt + (u ? 3*u : 3*k);
+  const Lc = [], Rc = [], vb = document.getElementById('fig').viewBox.baseVal, slack = 14*k;
+  for (const it of items){ const [X, Y] = P(...it.at);
+    let side = it.side || labelSide[it.text] || (X < cx ? -1 : 1);
+    if (!it.side && side < 0 && X > cx + slack) side = 1; else if (!it.side && side > 0 && X < cx - slack) side = -1;
+    labelSide[it.text] = side; (side < 0 ? Lc : Rc).push({ ...it, X, Y }); }
+  let s = '';
+  for (const [col, side] of [[Lc, -1], [Rc, 1]]){
+    col.sort((a, b) => a.Y - b.Y);
+    let y = -1e9; for (const c of col){ c.py = Math.max(c.Y, y + gap, fs); y = c.py; }
+    const shift = col.length ? Math.max(0, col.reduce((a, c) => a + c.py - c.Y, 0) / col.length) : 0;
+    const room = col.length ? col[0].py - fs : 0; for (const c of col) c.py -= Math.min(shift, room);
+    for (const c of col){
+      c.n = ((window.__ln || (window.__ln = {}))[c.text] || (__ln[c.text] = Object.keys(__ln).length + 1)); const w = u ? hgt*(c.n > 9 ? 1.3 : 1) : c.text.length*fs*.62 + fs*1.5;
+      let px = side < 0 ? xmin - 10*k - w/2 : xmax + 10*k + w/2; px = Math.max(vb.x + w/2 + 2*k, Math.min(vb.x + vb.width - w/2 - 2*k, px));
+      const ex = px - side*w/2;
+      s += `<g class="tag${c.on ? ' on' : ''}" data-n="${c.n}" data-t="${c.text}"><path d="M${f(c.X)} ${f(c.Y)}L${f(ex + side*-4*k)} ${f(c.py)}L${f(ex)} ${f(c.py)}" fill="none" stroke="${INK}" stroke-width="1"/>`
+        + `<circle cx="${f(c.X)}" cy="${f(c.Y)}" r="${f(1.4*k)}" fill="${INK}"/>`
+        + `<rect x="${f(px - w/2)}" y="${f(c.py - hgt/2)}" width="${f(w)}" height="${f(hgt)}" rx="${f(hgt/2)}" fill="${c.on ? 'var(--accent,#f4b829)' : '#fff4d6'}" stroke="${INK}" stroke-width="1.2"/>`
+        + `<text x="${f(px)}" y="${f(c.py + fs*.36)}" font-size="${f(fs)}" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-weight="800" letter-spacing=".04em" fill="${INK}">${u ? c.n : c.text}</text></g>`;
+    }
+  }
+  return s;
+}
+
 function scene(st, m){
-  const k = ease(st.xr || 0), pl = planeOf(st.beta), secs = sectionOf(pl), sph = spheresOf(pl);
+  const k = ease(st.xr || 0), pl = planeOf(st.beta, st.phi), secs = sectionOf(pl), sph = spheresOf(pl);
   const viewSide = Math.sign(dot(pl.n, CAM_V)) || 1;
-  let s = board(VX - 46, VY - 46, VX + 46, VY + 46, BH, 6, WOOD);
+  let s = board(VX - 46, VY - 46, VX + 46, VY + 46, BH, 6, CAMEL);
   // clear acrylic casts a light shadow (its own fill-opacity: the page keeps shadow fills out of faded groups)
   s += castShadow([...coneRing(-1, RB), ...coneRing(1, RB)], BH, boardTop(VX - 46, VY - 46, VX + 46, VY + 46, BH, 6)).replace(`fill="${SHADOW}"`, `fill="${SHADOW}" fill-opacity=".4"`);
   s += sheetSvg(pl, k);
@@ -804,7 +841,7 @@ function scene(st, m){
     // the cut face and its curve
     for (const sc of secs.filter(x => x.sg === sg)){
       const face2 = fill(pd(sc.pts), m.l, `opacity=".86"`) + (sc.closed ? ink(pd(sc.pts), 2.4) : ink(pd(sc.pts, false), 2.4) + line([sc.pts[0], sc.pts[sc.pts.length - 1]], 1.1));
-      inner += act('cut', face2);
+      inner += face2;
       labels.push({ at: sc.pts[Math.floor(sc.pts.length/2)], text: secName(st), on: true });
     }
     if (k > 0){
@@ -821,11 +858,11 @@ function scene(st, m){
 
   // labels: anchors picked on the left of each part where it can be, so the pills split over both sides
   const leftmost = pts => pts.reduce((a, b) => P(...b)[0] < P(...a)[0] ? b : a);
-  const sheetEdge = clipBox([addV(HINGE, E2, -BOXR*2), addV(HINGE, E2, BOXR*2)], false);
+  const sheetEdge = clipBox([addV(PIV, pl.e2, -BOXR*2), addV(PIV, pl.e2, BOXR*2)], false);
   const items = [];
   if (secs.length) items.push({ at: leftmost(secs.flatMap(x => x.pts)), text: secName(st), on: true });
   if (sheetEdge.length === 2) items.push({ at: leftmost(sheetEdge), text: 'CUTTING PLANE', on: false });
-  items.push({ at: VTX, text: 'VERTEX', on: false });
+  items.push({ at: VTX, text: 'VERTEX', on: false, side: 1 });   // on the centre line: always right
   if (k > .6){
     items.push({ at: [VX, VY, VZ + HN*.85], text: 'AXIS', on: false });
     const big = sph.reduce((a, b) => !a || b.rho > a.rho ? b : a, null);
@@ -834,7 +871,7 @@ function scene(st, m){
     const dq = sph.find(q => q.dir && clipBox(q.dir, false).length === 2);
     if (dq) items.push({ at: leftmost(clipBox(dq.dir, false)), text: 'DIRECTRIX', on: false });
   }
-  s += xrCallouts(items, [VX - RB, VX + RB, VY - RB, VY + RB, BH, VZ + HN]);
+  s += callouts(items, [VX - RB, VX + RB, VY - RB, VY + RB, BH, VZ + HN]);
   return s;
 }
 
@@ -852,21 +889,48 @@ function tilt(st, d){
 }
 
 ui = mountFigure({
-  fig:'01', turn:'full', title:'Conic sections', palette:'cobalt',
+  fig:'01', turn:'full', title:'Conic sections', palette:'blue',
   size:[CW, CW, BOXTOP + 2], center:[VX, VY],
-  state:{ beta:0, target:0, anim:0 },
+  state:{ beta:0, phi:45, target:0, anim:0 },
   scene,
   stats: st => [
     { label:'Tilt', value:`${Math.round(st.beta)}°` },
     { label:'Eccentricity', value: ecc(st).toFixed(2) },
     { label:'Section', value: secName(st), small:true } ],
-  buttons:[
-    { label:'Tilt up', onClick:(st) => tilt(st, 10) },
-    { label:'Tilt down', onClick:(st) => tilt(st, -10) } ],
-  acts:{ cut:(st) => tilt(st, st.beta >= 89.5 ? -90 : 10) },
-  params:(st, q) => { if (q.has('tilt')) st.beta = st.target = Math.max(0, Math.min(90, +q.get('tilt'))); },
+  params:(st, q) => { if (q.has('tilt')) st.beta = st.target = Math.max(0, Math.min(90, +q.get('tilt'))); if (q.has('dir')) st.phi = +q.get('dir'); },
 });
-xrMount(() => ui, () => '');
+document.getElementById('lblctl').hidden = true;                    // labels are always on
+
+/* ---------- the camera circles the cone by itself; dragging up and down tilts the plane ---------- */
+window.GAME_KEYS = true;                                           // the arrows tilt the plane instead of turning the camera
+document.getElementById('vreset').closest('.ctl').hidden = true;   // no Front view / Turntable: the turn never stops
+const SPIN = 9;                                                    // degrees per second
+ui.animate(dt => { setCam(YAW + SPIN*dt, PITCH); return true; });
+const figEl = document.getElementById('fig');
+figEl.style.touchAction = 'none';
+let planeDrag = null;
+// Rodrigues: turn vector v about unit axis a by angle t
+const spinAbout = (v, a, t) => { const c = Math.cos(t), s2 = Math.sin(t), ax = norm(a), d = dot(ax, v), cr = cross(ax, v);
+  return norm(v.map((x, i) => x*c + cr[i]*s2 + ax[i]*d*(1 - c))); };
+// capture listeners on the figure run before the engine's own (camera) ones, which they stop
+figEl.addEventListener('pointerdown', e => { if (e.button) return; e.stopImmediatePropagation();
+  ui.st.anim++; planeDrag = { x: e.clientX, y: e.clientY, n: planeOf(ui.st.beta, ui.st.phi).n }; figEl.classList.add('drag');
+  try { figEl.setPointerCapture(e.pointerId); } catch {} }, true);
+figEl.addEventListener('pointermove', e => { if (!planeDrag) return; e.stopImmediatePropagation();
+  // trackball: up/down turns the plane about the screen's horizontal, left/right about the screen's vertical
+  const kk = Math.PI/figEl.getBoundingClientRect().height;
+  let n = spinAbout(planeDrag.n, CAM_R, (e.clientY - planeDrag.y)*kk);
+  n = spinAbout(n, CAM_U, (e.clientX - planeDrag.x)*kk);
+  if (n[2] < 0) n = n.map(v => -v);                                // the same plane, normal kept pointing up
+  let b = Math.acos(Math.min(1, n[2]))*180/Math.PI;
+  if (Math.abs(b - 70) < 1.5) b = 70;                              // the parabola is a single angle: snap onto it
+  if (b > .3) ui.st.phi = Math.atan2(n[1], n[0])*180/Math.PI;      // flat: the direction is undefined, keep the last one
+  ui.st.beta = ui.st.target = b; ui.invalidate(); }, true);
+const endPlaneDrag = () => { planeDrag = null; figEl.classList.remove('drag'); };
+figEl.addEventListener('pointerup', endPlaneDrag, true); figEl.addEventListener('pointercancel', endPlaneDrag, true);
+figEl.addEventListener('dblclick', e => e.stopImmediatePropagation(), true);
+addEventListener('keydown', e => { const d = { ArrowUp: 10, ArrowDown: -10 }[e.key];
+  if (!d || /input|textarea/i.test(e.target.tagName)) return; e.preventDefault(); tilt(ui.st, d); ui.render(); });
 </script><style>@media (max-width:560px),(pointer:coarse){#art{filter:none!important}.ctl:has(#wb){display:none!important}}</style><style>@media (max-width:560px){html body .kpad{width:100%;box-sizing:border-box;justify-content:space-between;gap:10px;margin:10px 0 0;padding:0;border:0;background:none;box-shadow:none}
 html body .kpad .dp{display:flex;gap:8px}html body .kpad .hub{display:none}
 html body .kpad .k{width:46px;height:42px;font-size:14px;border-radius:9px}
